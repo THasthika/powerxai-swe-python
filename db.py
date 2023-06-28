@@ -67,7 +67,7 @@ def get_reading_list(from_: int, to: int) -> list[Reading]:
         end_key -= 1
 
     ret = []
-    for t in timestamps[start_key:end_key]:
+    for t in timestamps[start_key:end_key+1]:
         ret.append(database[t])
 
     return ret
