@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request, Request
 
-from db import database, get_reading_list, add_reading, Reading, ReadingType, ReadingInstance
+from db import database, get_reading_list, add_reading, Reading, ReadingType
 from datetime import datetime, timezone
 
 app = Flask(__name__)
@@ -37,17 +37,27 @@ def _parse_post_data(request_data: bytes) -> list[Reading]:
             # parse reading float
             value = float(line_parts[2])
 
-            reading_instances = [ReadingInstance(
-                reading_type=reading_type, value=value)]
+            reading = Reading(timestamp=timestamp)
+            match reading_type:
+                case ReadingType.Voltage:
+                    reading.voltage = value
+                case ReadingType.Current:
+                    reading.current = value
 
-            ret.append(Reading(timestamp=timestamp,
-                       readings=reading_instances))
+            ret.append(reading)
 
         return ret
 
     except Exception as e:
         print(e)
         raise Exception("Could not parse data")
+
+
+def _format_output_time(timestamp: int, is_day: bool = False):
+    if is_day:
+        raise NotImplementedError()
+
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%dT%H:%M:%S.%LZ")
 
 
 @app.post("/data")
@@ -72,7 +82,7 @@ def get_data():
     try:
         from_ = _parse_isodatetime_string(
             request.args.get('from'), app_timezone)
-        to = _parse_isodatetime_string(request.args.get('from'), app_timezone)
+        to = _parse_isodatetime_string(request.args.get('to'), app_timezone)
         from_timestamp = int(from_.timestamp())
         to_timestamp = int(to.timestamp())
 
@@ -80,9 +90,28 @@ def get_data():
 
         readings = get_reading_list(from_timestamp, to_timestamp)
 
-        print(readings)
+        if len(readings) == 0:
+            return []
 
-        return {"success": True}
+        ret_json = []
+
+        for reading in readings:
+
+            # check voltage
+            if reading.voltage is not None:
+                ret_json.append({
+                    "time": _format_output_time(reading.timestamp),
+                    "name": ReadingType.Voltage,
+                    "value": reading.voltage
+                })
+            if reading.current is not None:
+                ret_json.append({
+                    "time": _format_output_time(reading.timestamp),
+                    "name": ReadingType.Current,
+                    "value": reading.current
+                })
+
+        return ret_json
     except Exception as e:
         print(e)
         return {"success": False}

@@ -10,15 +10,10 @@ class ReadingType(StrEnum):
 
 
 @dataclass
-class ReadingInstance():
-    reading_type: ReadingType
-    value: float
-
-
-@dataclass
 class Reading():
     timestamp: int
-    readings: list[ReadingInstance]
+    voltage: float | None = None
+    current: float | None = None
 
 
 # This is a fake database which stores data in-memory while the process is running
@@ -33,12 +28,17 @@ def add_reading(key: int, reading: Reading) -> None:
     """
     write_lock.acquire()
 
-    if key not in database:
-        database[key] = reading
-    else:
+    if key in database:
         r = database[key]
-        rlist = r.readings
-        rlist.append(reading)
+    else:
+        r = Reading(timestamp=key)
+
+    if reading.current is not None:
+        r.current = reading.current
+    if reading.voltage is not None:
+        r.voltage = reading.voltage
+
+    database[key] = r
 
     write_lock.release()
 
@@ -56,13 +56,18 @@ def get_reading_list(from_: int, to: int) -> list[Reading]:
     start_key = bisect.bisect_left(timestamps, from_)
     end_key = start_key
 
-    print(timestamps)
+    if start_key == len(timestamps):
+        return []
 
-    while end_key < len(timestamps) and timestamps[end_key] <= to:
-        end_key += 1
+    if to >= timestamps[-1]:
+        end_key = len(timestamps) - 1
+    else:
+        while timestamps[end_key] <= to:
+            end_key += 1
+        end_key -= 1
 
-    end_key -= 1
+    ret = []
+    for t in timestamps[start_key:end_key]:
+        ret.append(database[t])
 
-    print(start_key, end_key)
-
-    return []
+    return ret
