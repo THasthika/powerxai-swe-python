@@ -1,25 +1,93 @@
-from flask import Flask
+import os
+from flask import Flask, request, Request
 
-from db import get_reading, add_reading
+from db import database, get_reading_list, add_reading, Reading, ReadingType, ReadingInstance
+from datetime import datetime, timezone
 
 app = Flask(__name__)
+app_timezone = timezone.utc
+
+
+def _parse_isodatetime_string(dtstr: str, default_tz: timezone):
+    dt = datetime.fromisoformat(dtstr)
+    if dt is None:
+        dt = dt.replace(tzinfo=default_tz)
+    else:
+        dt = dt.astimezone(default_tz)
+    return dt
+
+
+def _parse_post_data(request_data: bytes) -> list[Reading]:
+    try:
+        ret = []
+        str_data = request.data.decode()
+        for line in str_data.splitlines():
+
+            line_parts = line.split(" ")
+            if len(line_parts) != 3:
+                raise Exception("Invalid format")
+
+            # parse timestamp
+            timestamp = int(line_parts[0])
+
+            # parse reading type
+            reading_type = line_parts[1]
+            reading_type = ReadingType(reading_type)
+
+            # parse reading float
+            value = float(line_parts[2])
+
+            reading_instances = [ReadingInstance(
+                reading_type=reading_type, value=value)]
+
+            ret.append(Reading(timestamp=timestamp,
+                       readings=reading_instances))
+
+        return ret
+
+    except Exception as e:
+        print(e)
+        raise Exception("Could not parse data")
 
 
 @app.post("/data")
 def post_data():
-    # TODO: parse incoming data, and save it to the database
-    # data is of the form:
-    #  {timestamp} {name} {value}
 
-    return {"success": False}
+    try:
+        input_data = _parse_post_data(request.data)
+
+        for reading in input_data:
+            add_reading(reading.timestamp, reading)
+
+        return {"success": True}
+
+    except Exception as e:
+        print(e)
+        return {"success": False}
 
 
 @app.get("/data")
 def get_data():
-    # TODO: check what dates have been requested, and retrieve all data within the given range
 
-    return {"success": False}
+    try:
+        from_ = _parse_isodatetime_string(
+            request.args.get('from'), app_timezone)
+        to = _parse_isodatetime_string(request.args.get('from'), app_timezone)
+        from_timestamp = int(from_.timestamp())
+        to_timestamp = int(to.timestamp())
+
+        print(from_timestamp, to_timestamp)
+
+        readings = get_reading_list(from_timestamp, to_timestamp)
+
+        print(readings)
+
+        return {"success": True}
+    except Exception as e:
+        print(e)
+        return {"success": False}
 
 
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(port=port, debug=True)
