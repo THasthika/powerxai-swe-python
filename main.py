@@ -57,7 +57,9 @@ def _format_output_time(timestamp: int, is_day: bool = False):
     if is_day:
         raise NotImplementedError()
 
-    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%dT%H:%M:%S.%LZ")
+    dt = datetime.fromtimestamp(timestamp)
+
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + dt.strftime("%f")[:3] + "Z"
 
 
 @app.post("/data")
